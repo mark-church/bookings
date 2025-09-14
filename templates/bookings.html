@@ -1,0 +1,22 @@
+
+{% extends 'layout.html' %}
+
+{% block content %}
+  <h1>My Bookings</h1>
+  {% if bookings %}
+    <ul class="list-group">
+      {% for booking in bookings %}
+        <li class="list-group-item">
+          <h5>{{ booking.room.hotel.name }}</h5>
+          <p>Room: {{ booking.room.number }} ({{ booking.room.type }})</p>
+          <p>Date: {{ booking.date }}</p>
+          <form action="{{ url_for('cancel', booking_id=booking.id) }}" method="post" style="display: inline;">
+            <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>You have no bookings.</p>
+  {% endif %}
+{% endblock %}

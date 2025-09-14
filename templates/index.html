@@ -1,0 +1,14 @@
+
+{% extends 'layout.html' %}
+
+{% block content %}
+  <h1>Hotels</h1>
+  <div class="list-group">
+    {% for hotel in hotels %}
+      <a href="{{ url_for('hotel', hotel_id=hotel.id) }}" class="list-group-item list-group-item-action">
+        <h5>{{ hotel.name }}</h5>
+        <p class="mb-1">{{ hotel.location }}</p>
+      </a>
+    {% endfor %}
+  </div>
+{% endblock %}
