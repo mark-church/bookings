@@ -1,15 +1,24 @@
-
 import os
 from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from prometheus_flask_exporter import PrometheusMetrics
- 
+from prometheus_client import Counter, Gauge
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from prometheus_client import make_wsgi_app
+from werkzeug.serving import run_simple
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bookings.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 metrics = PrometheusMetrics(app)
+
+# Custom Metrics
+db_commits_total = Counter('database_commits_total', 'Total number of successful database commits')
+db_commit_failures_total = Counter('database_commit_failures_total', 'Total number of failed database commits')
+new_bookings_total = Counter('new_bookings_total', 'Total number of new bookings created')
+canceled_bookings_total = Counter('canceled_bookings_total', 'Total number of bookings canceled')
+total_bookings = Gauge('total_bookings', 'Total number of current bookings')
 
 # --- Database Models ---
 class Hotel(db.Model):
@@ -44,23 +53,48 @@ def hotel(hotel_id):
         date = request.form['date']
         new_booking = Booking(room_id=room_id, date=date)
         db.session.add(new_booking)
-        db.session.commit()
+        try:
+            db.session.commit()
+            db_commits_total.inc()
+            new_bookings_total.inc()
+        except Exception:
+            db.session.rollback()
+            db_commit_failures_total.inc()
         return redirect(url_for('bookings'))
     return render_template('hotel.html', hotel=hotel)
 
 @app.route('/bookings')
 def bookings():
     all_bookings = Booking.query.all()
+    total_bookings.set(len(all_bookings))
     return render_template('bookings.html', bookings=all_bookings)
 
 @app.route('/cancel/<int:booking_id>', methods=['POST'])
 def cancel(booking_id):
     booking = Booking.query.get_or_404(booking_id)
     db.session.delete(booking)
-    db.session.commit()
+    try:
+        db.session.commit()
+        db_commits_total.inc()
+        canceled_bookings_total.inc()
+    except Exception:
+        db.session.rollback()
+        db_commit_failures_total.inc()
     return redirect(url_for('bookings'))
 
+metrics.register_default(
+    metrics.counter(
+        'by_path_counter', 'Request count by request paths',
+        labels={'path': lambda: request.path}
+    )
+)
+
 if __name__ == '__main__':
+    # Dispatcher Middleware to serve metrics separately
+    dispatcher = DispatcherMiddleware(app, {
+        '/metrics': make_wsgi_app()
+    })
+
     with app.app_context():
         db.create_all()
         # Add some sample data if the database is empty
@@ -81,4 +115,6 @@ if __name__ == '__main__':
 
             db.session.add_all([room101, room102, room201, room301])
             db.session.commit()
-    app.run(debug=True)
+            
+    # Run the app with the dispatcher middleware
+    run_simple('localhost', 5001, dispatcher, use_reloader=True, use_debugger=True)
