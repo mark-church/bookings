@@ -117,4 +117,4 @@ if __name__ == '__main__':
             db.session.commit()
             
     # Run the app with the dispatcher middleware
-    run_simple('localhost', 5001, dispatcher, use_reloader=True, use_debugger=True)
+    run_simple('0.0.0.0', 8000, dispatcher, use_reloader=True, use_debugger=True)
