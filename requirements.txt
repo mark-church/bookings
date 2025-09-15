@@ -1,5 +1,1 @@
-Flask
-Flask-SQLAlchemy
 prometheus-flask-exporter
-prometheus-client
-werkzeug
