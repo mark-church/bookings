@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-generator
+  template:
+    metadata:
+      labels:
+        app: traffic-generator
+    spec:
+      containers:
+      - name: traffic-generator
+        image: alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache curl;
+          while true; do
+            if [ $((RANDOM % 2)) -eq 0 ]; then
+              curl http://app:8000/;
+            else
+              curl http://app:8000/posts;
+            fi;
+            sleep $((RANDOM % 5));
+          done

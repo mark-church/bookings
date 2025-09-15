@@ -1,0 +1,107 @@
+services:
+  app:
+    build:
+      context: .
+    container_name: app
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+    ports:
+      - 8000:8000
+    volumes:
+      - .:/app
+    depends_on:
+      - prometheus
+      - otel-collector
+    networks:
+      - prom-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/etc/prometheus/console_libraries
+      - --web.console.templates=/etc/prometheus/consoles
+      - --web.enable-lifecycle
+    expose:
+      - 9090
+    ports:
+      - 9090:9090
+    networks:
+      - prom-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    restart: unless-stopped
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    command:
+      - --config=/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus exporter
+    networks:
+      - prom-net
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # Jaeger UI
+    networks:
+      - prom-net
+
+  mcp-server:
+    image: ghcr.io/pab1it0/prometheus-mcp-server:latest
+    container_name: mcp-server
+    restart: unless-stopped
+    environment:
+      PROMETHEUS_URL: "http://prometheus:9090"
+      PROMETHEUS_MCP_SERVER_TRANSPORT: "http"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "Accept: text/event-stream", "http://localhost:8080/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - prometheus
+    networks:
+      - prom-net
+
+  traffic-generator:
+    image: alpine
+    container_name: traffic-generator
+    restart: unless-stopped
+    command: >
+      /bin/sh -c "apk add --no-cache curl;
+      while true; do
+        if [ $((RANDOM % 2)) -eq 0 ]; then
+          curl http://app:8000/;
+        else
+          curl http://app:8000/posts;
+        fi;
+        sleep $((RANDOM % 5));
+      done"
+    depends_on:
+      - app
+      - jaeger
+    networks:
+      - prom-net
+
+volumes:
+  prometheus_data:
+
+networks:
+  prom-net:
+    driver: bridge
