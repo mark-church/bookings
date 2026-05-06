@@ -1,3 +1,3 @@
 # bookings
 
-## Last Updated: 2026-05-06
+## Last Updated: May 6th, 2026
