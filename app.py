@@ -52,7 +52,7 @@ def hotel(hotel_id):
         room_id = request.form['room_id']
         date = request.form['date']
         new_booking = Booking(room_id=room_id, date=date)
-        db.session.add_booking(new_booking)
+        db.session.add(new_booking)
         try:
             db.session.commit()
             db_commits_total.inc()
